@@ -6,12 +6,12 @@
 }
 
 body {
-    background: url("bg11.jpg") no-repeat center center/cover;
+    background: url("bg09.png") no-repeat center center/cover;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    color: #fff;
+    color: #ffffff;
     text-align: center;
      overflow: hidden; /* Hide overflow for snowflakes */
 }
@@ -48,11 +48,11 @@ h3 {
 
 
 .login-button {
-    background-color: rgba(211, 147, 38, 0.915);
+    background-color: rgba(238, 154, 9, 0.738);
 }
 
 .register-button {
-    background-color: saddlebrown;
+    background-color: rgba(153, 76, 21, 0.804);
 }
 
 .button:hover {
@@ -82,3 +82,10 @@ h3 {
         gap: 10px;
     }
 }
+.footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.9rem;
+      animation: fadeIn 1s ease;
+    }

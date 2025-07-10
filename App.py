@@ -17,6 +17,13 @@ from flask import flash, redirect, url_for, request, render_template
 import re 
 from flask import Flask, render_template, request
 from flask import Flask, render_template, request
+from flask import Flask, request, render_template, jsonify
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.document_loaders import UnstructuredFileLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+import os
+import requests
 
 
 load_dotenv()
@@ -33,6 +40,20 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///users.db"
 db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+app.config['UPLOAD_FOLDER'] = "uploads"
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+CHROMA_DB_DIR = "doc_db"
+os.makedirs(CHROMA_DB_DIR, exist_ok=True)
+
+# Initialize embedding model
+embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+vectordb = Chroma(persist_directory=CHROMA_DB_DIR, embedding_function=embedding)
+
+# Groq API setup
+GROQ_API_KEY = "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"  # Replace with your actual key
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 # user_loader callback
@@ -216,11 +237,33 @@ def reset_password():
     return render_template("reset_password.html")
 
 
-@app.route('/secret', methods=['GET', 'POST'])
+@app.route('/secretz', methods=['GET', 'POST'])
 @login_required
 def secretz():
-    messages = get_flashed_messages(with_categories=True)
-    return render_template("secret.html", username=current_user.username)
+    message = ""
+    if request.method == "POST":
+        if "document" in request.files:
+            file = request.files["document"]
+            if file and file.filename:
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                file.save(filepath)
+
+                try:
+                    loader = UnstructuredFileLoader(filepath)
+                    docs = loader.load()
+
+                    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+                    chunks = splitter.split_documents(docs)
+
+                    vectordb.add_documents(chunks)
+                    vectordb.persist()
+                    message = f"✅ Stored {len(chunks)} chunks from '{file.filename}'"
+                except Exception as e:
+                    message = f"❌ Error processing file: {str(e)}"
+                finally:
+                    os.remove(filepath)
+
+    return render_template("secret.html", message=message)
 
 
 @app.route('/logout')
@@ -236,24 +279,119 @@ def download():
         return send_from_directory('static', 'Drug report.pdf')
 
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/home", methods=["GET", "POST"])
 def home():
     reviews = []
     drug_name = ""
 
     if request.method == "POST":
         drug_name = request.form["drug_name"].strip()
-        reviews = analyze_reviews(drug_name)
+        
 
     return render_template("screte.html", drug=drug_name, reviews=reviews)
 
 
-@app.route('/', methods=['GET'])
+@app.route('/secret', methods=['GET'])
 def secret():
     """Display the input form"""
     return render_template('secret.html')
 
 
+@app.route("/hello", methods=["GET", "POST"])
+def hello():
+    message = ""
+    if request.method == "POST":
+        if "document" in request.files:
+            file = request.files["document"]
+            if file and file.filename:
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                file.save(filepath)
+
+                try:
+                    loader = UnstructuredFileLoader(filepath)
+                    docs = loader.load()
+
+                    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+                    chunks = splitter.split_documents(docs)
+
+                    vectordb.add_documents(chunks)
+                    vectordb.persist()
+                    message = f"✅ Stored {len(chunks)} chunks from '{file.filename}'"
+                except Exception as e:
+                    message = f"❌ Error processing file: {str(e)}"
+                finally:
+                    os.remove(filepath)
+
+    return render_template("secret.html", message=message)
+
+
+@app.route("/ask_llm", methods=["POST"])
+def ask_llm():
+    user_query = request.json.get("user_query")
+
+    # Search in vector DB
+    results = vectordb.similarity_search_with_score(user_query, k=5)
+    relevant_context = "\n\n".join([doc.page_content for doc, score in results if score < 0.75])
+
+    if relevant_context:
+        return jsonify({
+            "answer": relevant_context
+        })
+    else:
+        return jsonify({
+            "needs_permission": True,
+            "message": "I couldn't find an answer in your document. Can I use AI to help?"
+        })
+
+@app.route("/ask_groq", methods=["POST"])
+def ask_groq():
+    user_query = request.json.get("user_query")
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama3-8b-8192",
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": user_query}
+        ]
+    }
+
+    try:
+        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return jsonify({"answer": data["choices"][0]["message"]["content"]})
+    except Exception as e:
+        return jsonify({"error": f"❌ Failed to get answer from Groq: {str(e)}"}), 500
+
+@app.route("/get_chunks", methods=["GET"])
+def get_chunks():
+    try:
+        all_docs = vectordb.get()
+        chunks = []
+
+        for i, doc in enumerate(all_docs["documents"]):
+            metadata = all_docs["metadatas"][i]
+            chunks.append({
+                "id": i,
+                "content": doc,
+                "metadata": metadata
+            })
+
+        return jsonify({"chunks": chunks})
+    except Exception as e:
+        return jsonify({"error": f"Failed to retrieve chunks: {str(e)}"}), 500
+
+@app.route("/clear_db", methods=["POST"])
+def clear_db():
+    try:
+        vectordb._collection.delete(where={})  # Clear all entries
+        return jsonify({"message": "✅ All data cleared. You can upload a new document."})
+    except Exception as e:
+        return jsonify({"error": f"❌ Failed to clear database: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
