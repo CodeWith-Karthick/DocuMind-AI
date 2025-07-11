@@ -1,101 +1,134 @@
-# 🛡️ User Authentication System - MediFetch (Front-End Only)
+# 📄 DocuMind AI – Intelligent Document Q&A System
 
-This is a **Flask-based front-end application** for user authentication, password recovery via email, and secure login/logout flows.
+**DocuMind AI** is a Flask-based web application that allows users to upload documents, store vector embeddings for context-aware search, and get accurate answers either from the uploaded content or via fallback to a powerful LLM (Groq's LLaMA 3).
 
 ---
 
 ## 🚀 Features
 
-- ✅ User Registration with validation
-- ✅ Secure Login with Flask-Login
-- ✅ Password recovery via email (recovery code with expiry)
-- ✅ Password reset with validation (uppercase + number + min length)
-- ✅ Logged-in protected route
-- ✅ Logout functionality
-- ✅ Download option (example: drug report PDF)
+- 🔐 User registration, login, and password recovery via email
+- 📤 Upload and process unstructured documents
+- 🔍 Vector-based semantic search with **LangChain + Chroma**
+- 🧠 Fallback to **Groq LLM (LLaMA 3)** when no relevant context is found
+- 📚 Chunk viewer for uploaded documents
+- 🗑️ Clear vector database
+- ✉️ Email integration for password reset
 
 ---
 
-## 🛠️ Tech Stack
+## 📁 Directory Structure
 
-- **Backend Framework**: Flask (Python)
-- **Database**: SQLite (via SQLAlchemy ORM)
-- **Authentication**: Flask-Login
-- **Email Service**: Gmail SMTP
-- **Templating**: Jinja2 (via HTML templates)
-- **Password Security**: PBKDF2 Hashing
-- **Environment Variables**: Python Dotenv
+DocuMind-AI/
+│
+├── app.py # Main Flask app
+├── users.db # SQLite database
+├── uploads/ # Uploaded files
+├── doc_db/ # Chroma vector DB files
+├── templates/ # HTML templates
+│ ├── index.html
+│ ├── login.html
+│ ├── register.html
+│ ├── secret.html
+│ ├── reset_password.html
+│ └── forget.html
+└── static/ # Static assets like CSS, JS, etc.
+
+markdown
+Copy
+Edit
 
 ---
 
-## 📁 Project Structure
+## ⚙️ Tech Stack
 
-User_Auth_Flask/
-├── templates/
-│   ├── index.html
-│   ├── login.html
-│   ├── register.html
-│   ├── forget.html
-│   ├── reset_password.html
-│   ├── secret.html
-├── static/
-│   └── Drug report.pdf
-├── app.py
-├── .env
-├── requirements.txt
-├── README.md
-🧪 Setup Instructions
-🔹 1. Clone the Repository
+- **Flask** – Web Framework
+- **SQLite + SQLAlchemy** – Database
+- **Flask-Login** – User Session Management
+- **LangChain** – Embeddings & Document Chunks
+- **Chroma** – Vector Store
+- **HuggingFace Embeddings** – `all-MiniLM-L6-v2`
+- **Groq LLM** – `llama3-8b-8192` model for fallback Q&A
+- **SMTP (Gmail)** – For sending password recovery codes
 
-Copy
-Edit
-git clone https:https://github.com/CodeWith-Karthick/cts-front-end.git
-cd User_Auth_Flask
-🔹 2. Set Up a Virtual Environment
+---
 
-Copy
-Edit
-python -m venv env
-source env/bin/activate   # on macOS/Linux
-env\Scripts\activate      # on Windows
-🔹 3. Install Dependencies
+## 🔑 Environment Variables
 
-Copy
-Edit
+Create a `.env` file in the root directory and add:
+
+GROQ_API_KEY=your_groq_api_key
+Make sure python-dotenv is installed.
+
+🔧 Installation & Run
+1. Clone the Repo
+
+git clone https://github.com/CodeWith-Karthick/DocuMind-AI.git
+cd DocuMind-AI
+2. Install Dependencies
+
 pip install -r requirements.txt
-Don’t forget to create a .env file and include Gmail credentials for password recovery.
+If requirements.txt is missing, install manually:
 
-🔹 4. Run the App
 
-Copy
-Edit
+pip install flask flask_sqlalchemy flask_login python-dotenv langchain langchain-community chromadb sentence-transformers unstructured requests
+3. Run the App
+
 python app.py
-Access the app at: http://localhost:5001
+Visit http://localhost:5001
 
-🔐 Sample .env File
-ini
-Copy
-Edit
-EMAIL_USER=your_email
-EMAIL_PASS=your_app_password_here
-❗ Note
-This is only the front-end component. Backend data analysis, user insights, or dashboards are assumed to be part of a separate module.
-
-📬 License
-This project is part of the MediFetch ecosystem. Feel free to contribute or fork for educational purposes.
-
-yaml
-Copy
-Edit
-
----
-
-## Screenshots
-![Screenshot (1712)](https://github.com/user-attachments/assets/f557468c-9b37-4d8f-9cc8-de402c64fd1f)
-![Screenshot (1713)](https://github.com/user-attachments/assets/5751d24f-18b1-4d09-8f55-4cfd73d1cc86)
-![Screenshot (1714)](https://github.com/user-attachments/assets/5d5666ee-1bef-4b7e-bb44-e132c8a023dc)
-![Screenshot (1715)](https://github.com/user-attachments/assets/e18e7879-0008-4d45-9aa0-3ac8391e754a)
-![Screenshot (1716)](https://github.com/user-attachments/assets/6b5ced52-3e51-404c-a0c0-b32b79b025a9)
+📬 Email Recovery Setup
+Ensure you update the following in send_recovery_email():
 
 
+from_email = "noreplyyourapp@gmail.com"
+from_password = "your_app_password"  # App password, not Gmail login password
+Enable 2-Step Verification in Gmail and generate an App Password to use here.
 
+🧪 Example Flow
+Register an account
+
+Login
+
+Upload a PDF or DOCX file
+
+Ask a question related to the content
+
+If no match is found, AI will suggest fallback to Groq
+
+Optionally clear all chunks and upload another file
+
+📄 Sample Query
+
+POST /ask_llm
+{
+  "user_query": "What is a heart attack?"
+}
+If a match is found in vector DB, it is returned. Otherwise:
+
+
+{
+  "needs_permission": true,
+  "message": "I couldn't find an answer in your document. Can I use AI to help?"
+}
+❗ Security Note
+Your current Groq API key and Gmail credentials are hardcoded – move them to .env for security.
+
+Rate-limit email requests in production to avoid abuse.
+
+💡 Future Improvements
+Add PDF parsing preview
+
+Add file format validation
+
+Improve UI with Tailwind or Bootstrap
+
+Log user questions and AI responses
+
+Use Redis or PostgreSQL for scalable DB
+
+🧑‍💻 Author
+Karthick G
+🔗 GitHub
+
+📜 License
+This project is licensed under the MIT License.
